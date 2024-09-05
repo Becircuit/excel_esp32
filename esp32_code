@@ -1,0 +1,92 @@
+
+
+#include <SHT3x.h>
+SHT3x Sensor;
+
+float temp = 0.0;
+float hum = 0.0;
+unsigned long timeRead = 0;
+
+//===WiFi definitions===
+#include <HTTPClient.h>
+
+// Replace with your SSID and Password
+const char* ssid = "ssid";
+const char* password = "pswd";
+const char* serverName = "script google";
+
+void setup() {
+
+  Serial.begin(115200);  //initialize the serial transmition at 115200 bauds
+
+  Sensor.Begin();
+
+  //===WiFi initialization===
+  initWifi();
+}
+
+void loop() {
+
+  if (millis() - timeRead > 2000) {
+    Sensor.UpdateData();
+
+    temp = Sensor.GetTemperature();
+    hum = Sensor.GetRelHumidity();
+
+    Serial.print("Temperature: ");
+    Serial.print(temp);
+    Serial.write("\xC2\xB0");  //The Degree symbol
+    Serial.println("C");
+    Serial.print("Humidity: ");
+    Serial.print(hum);
+    Serial.println("%");
+
+    sendToGoogleSheet();
+
+    timeRead = millis();
+  }
+}
+
+void initWifi() {
+  Serial.print("Connecting to: ");
+  Serial.print(ssid);
+
+  WiFi.begin(ssid, password);
+
+  int timeout = 10 * 4;  // 10 seconds
+  while (WiFi.status() != WL_CONNECTED && (timeout-- > 0)) {
+    delay(250);
+    Serial.print(".");
+  }
+  Serial.println("");
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Failed to connect");
+  }
+
+  Serial.print("WiFi connected with IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void sendToGoogleSheet() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/json");
+
+    String jsonData = "{\"temp\":\"" + String(temp) + "\", \"hum\":\"" + String(hum) + "\"}";
+
+    int httpResponseCode = http.POST(jsonData);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println(httpResponseCode);
+      Serial.println(response);
+    } else {
+      Serial.print("Wrong request POST: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  }
+}
